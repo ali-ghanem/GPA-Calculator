@@ -16,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableModel;
 
 /**
@@ -29,7 +30,6 @@ public class MainFrame extends JFrame implements ActionListener {
 	private JTable table;
 	private String[] columnNames = { "COURSE NAME", "CREDIT", "GRADE" };
 	private DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
-	private ArrayList<Course> courses;
 
 	public MainFrame() {
 		setLayout(new BorderLayout());
@@ -60,7 +60,6 @@ public class MainFrame extends JFrame implements ActionListener {
 		// ============================================//
 		// Table Panel //
 		// ============================================//
-		courses = new ArrayList<>();
 		readSavedData();
 
 		table = new JTable(tableModel);
@@ -76,17 +75,6 @@ public class MainFrame extends JFrame implements ActionListener {
 		setResizable(false);
 		setVisible(true);
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
-	}
-
-	public void getTableData() {
-		tableModel.setRowCount(0);
-		for (int i = 0; i < courses.size(); i++) {
-			String name = courses.get(i).getName();
-			int credit = courses.get(i).getCredit();
-			String grade = courses.get(i).getGrade();
-			Object[] data = { name, credit, grade };
-			tableModel.addRow(data);
-		}
 	}
 
 	public double toNumericGrade(String g) {
@@ -116,12 +104,13 @@ public class MainFrame extends JFrame implements ActionListener {
 	}
 
 	public void calculateGpa() {
-		updateCourses();
 		int credit = 0;
 		double grade = 0.0;
-		for (int i = 0; i < courses.size(); i++) {
-			credit += courses.get(i).getCredit();
-			grade += toNumericGrade(courses.get(i).getGrade()) * courses.get(i).getCredit();
+		for (int i = 0; i < tableModel.getRowCount(); i++) {
+			int tableCredit = Integer.parseInt((String) tableModel.getValueAt(i, 1));
+			String tableGrade = (String) tableModel.getValueAt(i, 2);
+			credit += tableCredit;
+			grade += toNumericGrade(tableGrade.trim()) * tableCredit;
 		}
 		double result = Math.round((grade / credit) * 100.0) / 100.0;
 		JOptionPane.showMessageDialog(this, "Your GPA is " + result);
@@ -141,10 +130,8 @@ public class MainFrame extends JFrame implements ActionListener {
 			String courseGrade = tfGrade.getText();
 			if (courseName != null && courseCredit != null && courseGrade != null) {
 				try {
-					Course course = new Course(courseName.toUpperCase(), Integer.parseInt(courseCredit),
-							courseGrade.toUpperCase());
-					courses.add(course);
-					getTableData();
+					Object[] data = { courseName.toUpperCase(), courseCredit, courseGrade.toUpperCase() };
+					tableModel.addRow(data);
 					JOptionPane.showMessageDialog(this, "Course has been successfully added");
 				} catch (Exception e) {
 					JOptionPane.showMessageDialog(this, "An error ocurred. please try again.");
@@ -158,9 +145,8 @@ public class MainFrame extends JFrame implements ActionListener {
 		String name = JOptionPane.showInputDialog(this, "Enter course name");
 		String message = "No such course was found.";
 		if (name != null) {
-			for (int i = 0; i < courses.size(); i++) {
-				if (courses.get(i).getName().equalsIgnoreCase(name)) {
-					courses.remove(i);
+			for (int i = 0; i < tableModel.getRowCount(); i++) {
+				if (tableModel.getValueAt(i, 0).equals(name.toUpperCase())) {
 					tableModel.removeRow(i);
 					message = "Course has been successfully deleted.";
 				}
@@ -170,13 +156,13 @@ public class MainFrame extends JFrame implements ActionListener {
 	}
 
 	public void saveData() {
-		updateCourses();
 		try {
 			PrintWriter pw = new PrintWriter(new FileOutputStream("savedData.txt"));
-			for (int i = 0; i < courses.size(); i++) {
-				pw.print(courses.get(i).getName() + " ");
-				pw.print(courses.get(i).getCredit() + " ");
-				pw.print(courses.get(i).getGrade() + " ");
+			for (int i = 0; i < tableModel.getRowCount(); i++) {
+				String name = (String) tableModel.getValueAt(i, 0);
+				String credit = (String) tableModel.getValueAt(i, 1);
+				String grade = (String) tableModel.getValueAt(i, 2);
+				pw.print(name + "," + credit + "," + grade + "\n");
 			}
 			pw.close();
 		} catch (FileNotFoundException e) {
@@ -188,33 +174,17 @@ public class MainFrame extends JFrame implements ActionListener {
 		try {
 			Scanner s = new Scanner(new FileInputStream("savedData.txt"));
 			while (s.hasNext()) {
-				String name = s.next();
-				int credit = Integer.parseInt(s.next());
-				String grade = s.next();
-				Course course = new Course(name, credit, grade);
-				courses.add(course);
+				String line = s.nextLine();
+				String[] lineElements = line.split(",");
+				String name = lineElements[0];
+				String credit = lineElements[1];
+				String grade = lineElements[2];
+				Object[] data = { name, credit, grade };
+				tableModel.addRow(data);
 			}
 			s.close();
-			getTableData();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
-		}
-	}
-
-	public void updateCourses() {
-		courses.clear();
-		for (int i = 0; i < tableModel.getRowCount(); i++) {
-			try {
-				String name = (String) tableModel.getValueAt(i, 0);
-				int credit = (int) tableModel.getValueAt(i, 1);
-				String grade = (String) tableModel.getValueAt(i, 2);
-				Course course = new Course(name, credit, grade);
-				courses.add(course);
-			}
-
-			catch (Exception e) {
-				e.printStackTrace();
-			}
 		}
 	}
 
@@ -222,11 +192,9 @@ public class MainFrame extends JFrame implements ActionListener {
 		int option = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete all courses?", "Clear All",
 				JOptionPane.YES_NO_OPTION);
 		if (option == JOptionPane.YES_OPTION) {
-			courses.clear();
 			tableModel.setRowCount(0);
 			JOptionPane.showMessageDialog(this, "Course list has been cleared.");
 		}
-
 	}
 
 	@Override
